@@ -82,7 +82,9 @@ function QuickBackupForm({ storages, initial, onClose }: { storages: Storage[]; 
   const qc = useQueryClient()
   const builtin = storages.find((s) => s.builtin)
   const sources = storages.filter((s) => !s.builtin)
-  const firstSource = sources.find((s) => s.type === 's3') ?? sources[0] ?? storages[0]
+  // Default to the first S3 storage that was added: usually the one to protect.
+  const byAge = [...sources].sort((a, b) => a.id - b.id)
+  const firstSource = byAge.find((s) => s.type === 's3') ?? byAge[0] ?? storages[0]
   const [src, setSrc] = useState<Location>({
     storage_id: initial.storage_id ?? firstSource.id,
     bucket: initial.bucket ?? '',
