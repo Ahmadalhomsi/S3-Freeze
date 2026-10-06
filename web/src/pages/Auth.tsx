@@ -10,6 +10,7 @@ export default function AuthPage({ setup }: { setup: boolean }) {
   const [username, setUsername] = useState(setup ? 'admin' : '')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [setupToken, setSetupToken] = useState('')
   const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState(false)
 
@@ -22,7 +23,7 @@ export default function AuthPage({ setup }: { setup: boolean }) {
     }
     setBusy(true)
     try {
-      await api.post(setup ? '/api/auth/setup' : '/api/auth/login', { username, password })
+      await api.post(setup ? '/api/auth/setup' : '/api/auth/login', setup ? { username, password, setup_token: setupToken } : { username, password })
       await qc.invalidateQueries({ queryKey: ['auth'] })
     } catch (err) {
       setError(err)
@@ -46,6 +47,15 @@ export default function AuthPage({ setup }: { setup: boolean }) {
           </CardHeader>
           <CardContent>
             <form onSubmit={submit} className="flex flex-col gap-4">
+              {setup && (
+                <Field
+                  label="Setup token"
+                  htmlFor="token"
+                  hint="Printed in the server logs on first start (Coolify → Logs, or docker logs). Proves you own this server."
+                >
+                  <Input id="token" className="font-mono" autoComplete="off" value={setupToken} onChange={(e) => setSetupToken(e.target.value)} required autoFocus />
+                </Field>
+              )}
               <Field label="Username" htmlFor="username">
                 <Input id="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus={!setup} />
               </Field>
@@ -57,7 +67,6 @@ export default function AuthPage({ setup }: { setup: boolean }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  autoFocus={setup}
                 />
               </Field>
               {setup && (
