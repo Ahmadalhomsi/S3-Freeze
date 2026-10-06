@@ -1,0 +1,24 @@
+services:
+  s3sync:
+    build: .
+    image: s3sync:latest
+    restart: unless-stopped
+    environment:
+      # Encrypts stored S3 credentials and passphrases. Set a long random value
+      # and keep it safe (e.g. `openssl rand -hex 32`). If unset, one is generated
+      # into the data volume on first start.
+      - MASTER_KEY=${MASTER_KEY:-}
+      - PORT=8080
+      # Set to true when served over HTTPS without a proxy that sends X-Forwarded-Proto.
+      - SECURE_COOKIES=${SECURE_COOKIES:-false}
+      - TZ=${TZ:-UTC}
+    ports:
+      - "8080:8080"
+    volumes:
+      - s3sync-data:/data
+      # Optional: target for "Local disk" storages.
+      - s3sync-backups:/backups
+
+volumes:
+  s3sync-data:
+  s3sync-backups:
