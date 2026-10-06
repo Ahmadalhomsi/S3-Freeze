@@ -25,11 +25,21 @@ type Server struct {
 	store *store.Store
 	eng   *engine.Engine
 	sched *scheduler.Scheduler
-	login *loginLimiter
+	setup *setupGuard
+
+	ipFails    *failureLimiter // failed logins per client IP
+	userFails  *failureLimiter // failed logins per username (distributed attacks)
+	apiLimiter *rateLimiter    // overall API request rate per client IP
 }
 
 func New(cfg *config.Config, st *store.Store, eng *engine.Engine, sched *scheduler.Scheduler) *Server {
-	return &Server{cfg: cfg, store: st, eng: eng, sched: sched, login: newLoginLimiter()}
+	return &Server{
+		cfg: cfg, store: st, eng: eng, sched: sched,
+		setup:      newSetupGuard(st),
+		ipFails:    newFailureLimiter(5, 15*time.Minute, 15*time.Minute),
+		userFails:  newFailureLimiter(10, 15*time.Minute, 15*time.Minute),
+		apiLimiter: newRateLimiter(20, 100),
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -53,6 +63,11 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("PUT /api/storages/{id}", s.updateStorage)
 	api.HandleFunc("DELETE /api/storages/{id}", s.deleteStorage)
 	api.HandleFunc("GET /api/storages/{id}/buckets", s.listBuckets)
+	api.HandleFunc("GET /api/storages/{id}/folders", s.listFolders)
+	api.HandleFunc("GET /api/storages/{id}/usage", s.storageUsage)
+	api.HandleFunc("GET /api/storages/{id}/disk", s.storageDisk)
+
+	api.HandleFunc("POST /api/backups", s.quickBackup)
 
 	api.HandleFunc("GET /api/jobs", s.listJobs)
 	api.HandleFunc("POST /api/jobs", s.createJob)
@@ -63,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/jobs/{id}/scan", s.scanJob)
 	api.HandleFunc("GET /api/jobs/{id}/snapshots", s.listSnapshots)
 	api.HandleFunc("GET /api/jobs/{id}/snapshots/{sid}/browse", s.browseSnapshot)
+	api.HandleFunc("GET /api/jobs/{id}/snapshots/{sid}/file", s.snapshotFile)
 	api.HandleFunc("POST /api/jobs/{id}/snapshots/{sid}/restore", s.restoreSnapshot)
 	api.HandleFunc("DELETE /api/jobs/{id}/snapshots/{sid}", s.deleteSnapshot)
 
@@ -76,7 +92,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/api/", s.requireAuth(api))
 
 	mux.Handle("/", spaHandler())
-	return securityHeaders(csrfGuard(mux))
+	return s.securityHeaders(s.rateLimit(csrfGuard(mux)))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -101,12 +117,27 @@ func csrfGuard(next http.Handler) http.Handler {
 	})
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+// contentSecurityPolicy only allows the app's own scripts; inline styles are
+// needed by the UI components.
+const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; " +
+	"object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		if s.isHTTPS(r) {
+			h.Set("Strict-Transport-Security", "max-age=31536000")
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			h.Set("Cache-Control", "no-store")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

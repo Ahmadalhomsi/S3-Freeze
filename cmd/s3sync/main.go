@@ -48,6 +48,12 @@ func run() error {
 	if err := st.FailInterruptedRuns(); err != nil {
 		return err
 	}
+	if err := st.EnsureBuiltinStorage(cfg.BackupDir); err != nil {
+		return err
+	}
+	if err := api.BootstrapAdmin(st, cfg); err != nil {
+		return err
+	}
 
 	tmpDir := filepath.Join(cfg.DataDir, "tmp")
 	os.RemoveAll(tmpDir)
@@ -66,10 +72,12 @@ func run() error {
 		Addr:              cfg.Addr,
 		Handler:           api.New(cfg, st, eng, sched).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    64 << 10,
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("listening", "addr", cfg.Addr, "data_dir", cfg.DataDir)
+		slog.Info("listening", "addr", cfg.Addr, "data_dir", cfg.DataDir, "backup_dir", cfg.BackupDir)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

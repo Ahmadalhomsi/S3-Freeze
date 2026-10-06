@@ -2,6 +2,7 @@ package store
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"time"
 )
@@ -55,14 +56,14 @@ func (s *Store) CreateSession(userID int64, ttl time.Duration) (string, error) {
 	}
 	token := hex.EncodeToString(b)
 	s.db.Exec(`DELETE FROM sessions WHERE expires_at < ?`, now())
-	_, err := s.db.Exec(`INSERT INTO sessions(token, user_id, expires_at) VALUES(?,?,?)`, token, userID, time.Now().Add(ttl).Unix())
+	_, err := s.db.Exec(`INSERT INTO sessions(token, user_id, expires_at) VALUES(?,?,?)`, hashToken(token), userID, time.Now().Add(ttl).Unix())
 	return token, err
 }
 
 // SessionUser returns the user owning a valid, unexpired session token.
 func (s *Store) SessionUser(token string) (*User, error) {
 	var uid int64
-	err := s.db.QueryRow(`SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?`, token, now()).Scan(&uid)
+	err := s.db.QueryRow(`SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?`, hashToken(token), now()).Scan(&uid)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -70,11 +71,36 @@ func (s *Store) SessionUser(token string) (*User, error) {
 }
 
 func (s *Store) DeleteSession(token string) error {
-	_, err := s.db.Exec(`DELETE FROM sessions WHERE token = ?`, token)
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE token = ?`, hashToken(token))
 	return err
 }
 
 func (s *Store) DeleteUserSessions(userID int64, except string) error {
-	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ? AND token != ?`, userID, except)
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ? AND token != ?`, userID, hashToken(except))
+	return err
+}
+
+// hashToken is what the sessions table stores, so a leaked database file does
+// not contain usable session tokens.
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// UpsertUser sets the password of a user, creating the user if needed, and
+// signs out all of its sessions.
+func (s *Store) UpsertUser(username, hash string) error {
+	u, err := s.UserByName(username)
+	if err == ErrNotFound {
+		_, err = s.CreateUser(username, hash)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.UpdatePassword(u.ID, hash); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, u.ID)
 	return err
 }
