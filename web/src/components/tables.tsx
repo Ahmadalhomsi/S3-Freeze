@@ -46,9 +46,9 @@ export function JobsTable({ jobs }: { jobs: Job[] }) {
                   {j.encryption && <Lock className="size-3 text-muted-foreground" />}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span className="max-w-40 truncate">{j.source_bucket || 'local'}{j.source_prefix && `/${j.source_prefix}`}</span>
+                  <span className="max-w-40 truncate">{j.source_bucket ? `${j.source_bucket}${j.source_prefix ? `/${j.source_prefix}` : ''}` : 'entire storage'}</span>
                   <ArrowRight className="size-3 shrink-0" />
-                  <span className="max-w-40 truncate">{j.dest_bucket || 'local'}{j.dest_prefix && `/${j.dest_prefix}`}</span>
+                  <span className="max-w-40 truncate">{[j.dest_bucket, j.dest_prefix].filter(Boolean).join('/') || 'root'}</span>
                 </span>
               </Link>
             </Td>

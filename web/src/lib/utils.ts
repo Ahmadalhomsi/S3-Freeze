@@ -55,3 +55,18 @@ export function percent(done: number, total: number): number {
   if (!total) return 0
   return Math.min(100, Math.round((done / total) * 100))
 }
+
+/** A safe folder name derived from free text, e.g. "My MinIO" -> "my-minio". */
+export function slug(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
+}
+
+/** Default repository folder for backups of a source: "<storage>[-<bucket>]". */
+export function defaultFolder(storageName: string | undefined, bucket: string): string {
+  return [slug(storageName ?? ''), slug(bucket)].filter(Boolean).join('-') || 'backup'
+}

@@ -95,8 +95,8 @@ export default function JobDetailPage() {
         )}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Info label="Source" value={`${j.source_bucket || '/'}${j.source_prefix ? `/${j.source_prefix}` : ''}`} sub={storageName(j.source_storage_id)} />
-          <Info label="Destination" value={`${j.dest_bucket || '/'}${j.dest_prefix ? `/${j.dest_prefix}` : ''}`} sub={storageName(j.dest_storage_id)} />
+          <Info label="Source" value={j.source_bucket ? `${j.source_bucket}${j.source_prefix ? `/${j.source_prefix}` : ''}` : 'Entire storage'} sub={storageName(j.source_storage_id)} />
+          <Info label="Destination" value={[j.dest_bucket, j.dest_prefix].filter(Boolean).join('/') || '/'} sub={storageName(j.dest_storage_id)} />
           <Info
             label="Schedule"
             value={j.schedule || 'Manual'}

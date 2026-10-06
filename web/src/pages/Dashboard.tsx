@@ -6,6 +6,7 @@ import { formatBytes, formatNumber, timeAgo } from '@/lib/utils'
 import { buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui'
 import { EmptyState, ErrorBox, kindLabel, Loading, PageHeader, RunProgress, Stat } from '@/components/common'
 import { JobsTable, RunsTable } from '@/components/tables'
+import { QuickBackupButton } from '@/components/QuickBackup'
 import { cn } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -28,9 +29,12 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Health of your object storage backups at a glance."
         actions={
-          <Link to="/jobs/new" className={buttonVariants()}>
-            <Plus /> New backup job
-          </Link>
+          <>
+            <Link to="/jobs/new" className={buttonVariants({ variant: 'outline' })}>
+              <Plus /> New scheduled job
+            </Link>
+            <QuickBackupButton />
+          </>
         }
       />
 

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Activity, Database, HardDrive, LayoutDashboard, LogOut, Menu, Moon, Settings, Sun, Archive, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui'
+import { Loading } from '@/components/common'
+import { QuickBackupButton } from '@/components/QuickBackup'
 
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -60,7 +62,8 @@ export default function Layout({ username }: { username: string }) {
           <X />
         </Button>
       </div>
-      <nav className="flex flex-col gap-0.5">
+      <QuickBackupButton className="w-full" />
+      <nav className="-mt-2 flex flex-col gap-0.5">
         {nav.map((n) => (
           <NavLink
             key={n.to}
@@ -115,7 +118,9 @@ export default function Layout({ username }: { username: string }) {
 
       <main className="lg:pl-60">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
-          <Outlet />
+          <Suspense fallback={<Loading />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

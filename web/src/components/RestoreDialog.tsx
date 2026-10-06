@@ -16,7 +16,7 @@ import {
   SwitchField,
 } from '@/components/ui'
 import { ErrorBox } from '@/components/common'
-import { LocationFields } from '@/pages/JobForm'
+import { LocationPicker, type Location } from '@/components/LocationPicker'
 
 export function RestoreDialog({
   job,
@@ -32,7 +32,8 @@ export function RestoreDialog({
   const navigate = useNavigate()
   const { data: storages = [] } = useQuery({ queryKey: ['storages'], queryFn: () => api.get<Storage[]>('/api/storages') })
   const [mode, setMode] = useState<'original' | 'other'>('original')
-  const [target, setTarget] = useState({ storage_id: job.source_storage_id, bucket: job.source_bucket, prefix: '' })
+  const [target, setTarget] = useState<Location>({ storage_id: job.source_storage_id, bucket: job.source_bucket, prefix: '' })
+  const wholeStorage = job.source_bucket === ''
   const [overwrite, setOverwrite] = useState(false)
 
   const req: RestoreRequest =
@@ -65,7 +66,7 @@ export function RestoreDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           {(
             [
-              ['original', 'Original location', `${job.source_bucket || 'local'} — same keys as when backed up`],
+              ['original', 'Original location', wholeStorage ? 'Every object back into its original bucket' : `${job.source_bucket} — same keys as when backed up`],
               ['other', 'Different location', 'Any storage, bucket and folder'],
             ] as const
           ).map(([value, title, desc]) => (
@@ -85,16 +86,14 @@ export function RestoreDialog({
         </div>
 
         {mode === 'other' && (
-          <LocationFields
+          <LocationPicker
             storages={storages}
-            storageId={target.storage_id}
-            bucket={target.bucket}
-            prefix={target.prefix}
-            onStorage={(v) => setTarget((t) => ({ ...t, storage_id: v, bucket: '' }))}
-            onBucket={(v) => setTarget((t) => ({ ...t, bucket: v }))}
-            onPrefix={(v) => setTarget((t) => ({ ...t, prefix: v }))}
-            prefixLabel="Into folder"
-            prefixHint="Prepended to every restored key, e.g. restored-2024-05-01/."
+            value={target}
+            onChange={setTarget}
+            bucketRequired={wholeStorage ? false : undefined}
+            bucketHint={wholeStorage ? 'Leave empty to restore each bucket under its original name (missing buckets are created).' : undefined}
+            folderLabel="Into folder"
+            folderHint="Prepended to every restored key, e.g. restored-2024-05-01/."
           />
         )}
 

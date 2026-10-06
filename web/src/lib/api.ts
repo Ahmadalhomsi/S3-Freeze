@@ -42,6 +42,7 @@ export interface Storage {
   use_ssl: boolean
   path_style: boolean
   local_path: string
+  builtin: boolean
   has_secret: boolean
   created_at: string
   updated_at: string
@@ -157,6 +158,36 @@ export interface Dashboard {
   runs_24h: { success: number; warning: number; failed: number }
   active_runs: Run[]
   recent_runs: Run[]
+}
+
+export interface DiskInfo {
+  path: string
+  total: number
+  free: number
+}
+
+export interface Usage {
+  objects: number
+  size: number
+  partial: boolean
+}
+
+export interface QuickBackupInput {
+  source_storage_id: number
+  source_bucket: string
+  source_prefix: string
+  dest_storage_id: number
+  dest_bucket: string
+  dest_prefix: string
+  encryption: boolean
+  passphrase: string
+}
+
+export interface QuickBackupResult {
+  job_id: number
+  job_name: string
+  run_id: number
+  existing_job: boolean
 }
 
 export interface AuthStatus {

@@ -5,6 +5,7 @@ import { api, type Job } from '@/lib/api'
 import { buttonVariants, Card } from '@/components/ui'
 import { EmptyState, ErrorBox, Loading, PageHeader } from '@/components/common'
 import { JobsTable } from '@/components/tables'
+import { QuickBackupButton } from '@/components/QuickBackup'
 
 export default function JobsPage() {
   const { data, isLoading, error } = useQuery({
@@ -14,14 +15,20 @@ export default function JobsPage() {
   })
 
   const newJob = (
-    <Link to="/jobs/new" className={buttonVariants()}>
-      <Plus /> New backup job
+    <Link to="/jobs/new" className={buttonVariants({ variant: 'outline' })}>
+      <Plus /> New scheduled job
     </Link>
   )
 
   return (
     <>
-      <PageHeader title="Backup jobs" description="Each job snapshots a bucket (or prefix) into a repository on schedule." actions={newJob} />
+      <PageHeader title="Backup jobs" description="Each job snapshots a storage, bucket or folder into a repository — on a schedule or on demand."
+        actions={
+          <>
+            {newJob}
+            <QuickBackupButton />
+          </>
+        } />
       {isLoading ? (
         <Loading />
       ) : error ? (

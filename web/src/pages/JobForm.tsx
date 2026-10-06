@@ -1,11 +1,12 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, KeyRound, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, type Job, type JobInput, type Storage } from '@/lib/api'
-import { cn } from '@/lib/utils'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Field, Input, Select, SwitchField } from '@/components/ui'
+import { cn, defaultFolder } from '@/lib/utils'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Field, Input, SwitchField } from '@/components/ui'
+import { LocationPicker } from '@/components/LocationPicker'
 import { ErrorBox, Loading, PageHeader } from '@/components/common'
 
 const schedulePresets = [
@@ -26,7 +27,7 @@ const defaults: JobInput = {
   source_prefix: '',
   dest_storage_id: 0,
   dest_bucket: '',
-  dest_prefix: 's3sync',
+  dest_prefix: '',
   compression: true,
   encryption: false,
   passphrase: '',
@@ -80,11 +81,20 @@ function JobForm({ job, storages }: { job?: Job; storages: Storage[] }) {
       ? toInput(job)
       : {
           ...defaults,
-          source_storage_id: storages[0]?.id ?? 0,
-          dest_storage_id: storages[1]?.id ?? storages[0]?.id ?? 0,
+          source_storage_id: (storages.find((s) => !s.builtin && s.type === 's3') ?? storages.find((s) => !s.builtin) ?? storages[0])?.id ?? 0,
+          dest_storage_id: (storages.find((s) => s.builtin) ?? storages[1] ?? storages[0])?.id ?? 0,
         },
   )
   const set = <K extends keyof JobInput>(k: K, v: JobInput[K]) => setForm((f) => ({ ...f, [k]: v }))
+
+  // New jobs name the destination folder after the source until it is edited.
+  const [folderTouched, setFolderTouched] = useState(!!job)
+  useEffect(() => {
+    if (folderTouched) return
+    const name = storages.find((s) => s.id === form.source_storage_id)?.name
+    setForm((f) => ({ ...f, dest_prefix: defaultFolder(name, f.source_bucket) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.source_storage_id, form.source_bucket, folderTouched])
   const isPreset = schedulePresets.some((p) => p.value === form.schedule)
   const [customSchedule, setCustomSchedule] = useState(!isPreset)
 
@@ -97,7 +107,7 @@ function JobForm({ job, storages }: { job?: Job; storages: Storage[] }) {
     },
   })
 
-  if (storages.length === 0) {
+  if (!storages.some((s) => !s.builtin)) {
     return (
       <>
         <PageHeader title="New backup job" />
@@ -149,18 +159,16 @@ function JobForm({ job, storages }: { job?: Job; storages: Storage[] }) {
           <Card>
             <CardHeader>
               <CardTitle>Source</CardTitle>
-              <CardDescription>The bucket (and optional prefix) to back up.</CardDescription>
+              <CardDescription>The whole storage, or one bucket and optionally a folder inside it.</CardDescription>
             </CardHeader>
             <CardContent>
-              <LocationFields
+              <LocationPicker
                 storages={storages}
-                storageId={form.source_storage_id}
-                bucket={form.source_bucket}
-                prefix={form.source_prefix}
-                onStorage={(v) => set('source_storage_id', v)}
-                onBucket={(v) => set('source_bucket', v)}
-                onPrefix={(v) => set('source_prefix', v)}
-                prefixHint="Only objects whose keys start with this prefix are included. Leave empty for the whole bucket."
+                value={{ storage_id: form.source_storage_id, bucket: form.source_bucket, prefix: form.source_prefix }}
+                onChange={(v) => setForm((f) => ({ ...f, source_storage_id: v.storage_id, source_bucket: v.bucket, source_prefix: v.prefix }))}
+                scope
+                showSize
+                folderHint="Only objects under this folder are included."
               />
             </CardContent>
           </Card>
@@ -171,15 +179,15 @@ function JobForm({ job, storages }: { job?: Job; storages: Storage[] }) {
               <CardDescription>Where snapshots are stored. Several jobs may share one repository to deduplicate across them.</CardDescription>
             </CardHeader>
             <CardContent>
-              <LocationFields
+              <LocationPicker
                 storages={storages}
-                storageId={form.dest_storage_id}
-                bucket={form.dest_bucket}
-                prefix={form.dest_prefix}
-                onStorage={(v) => set('dest_storage_id', v)}
-                onBucket={(v) => set('dest_bucket', v)}
-                onPrefix={(v) => set('dest_prefix', v)}
-                prefixHint="Folder inside the bucket that holds the repository."
+                value={{ storage_id: form.dest_storage_id, bucket: form.dest_bucket, prefix: form.dest_prefix }}
+                onChange={(v) => {
+                  const switched = v.storage_id !== form.dest_storage_id || v.bucket !== form.dest_bucket
+                  if (!switched && v.prefix !== form.dest_prefix) setFolderTouched(true)
+                  setForm((f) => ({ ...f, dest_storage_id: v.storage_id, dest_bucket: v.bucket, dest_prefix: switched ? f.dest_prefix : v.prefix }))
+                }}
+                folderHint="Folder that holds the repository. Named after the source by default."
               />
             </CardContent>
           </Card>
@@ -323,69 +331,3 @@ function RadioRow({ checked, onChange, label }: { checked: boolean; onChange: ()
   )
 }
 
-export function LocationFields({
-  storages,
-  storageId,
-  bucket,
-  prefix,
-  onStorage,
-  onBucket,
-  onPrefix,
-  prefixHint,
-  prefixLabel = 'Prefix',
-}: {
-  storages: Storage[]
-  storageId: number
-  bucket: string
-  prefix: string
-  onStorage: (v: number) => void
-  onBucket: (v: string) => void
-  onPrefix: (v: string) => void
-  prefixHint?: string
-  prefixLabel?: string
-}) {
-  const listId = useId()
-  const storage = storages.find((s) => s.id === storageId)
-  const buckets = useQuery({
-    queryKey: ['buckets', storageId],
-    queryFn: () => api.get<string[]>(`/api/storages/${storageId}/buckets`),
-    enabled: !!storageId,
-    retry: false,
-    staleTime: 60_000,
-  })
-
-  // Pick the first bucket automatically when none is set yet.
-  useEffect(() => {
-    if (!bucket && storage?.type === 's3' && buckets.data?.length) onBucket(buckets.data[0])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buckets.data])
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <Field label="Storage">
-        <Select value={storageId} onChange={(e) => onStorage(Number(e.target.value))}>
-          {storages.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field
-        label={storage?.type === 'local' ? 'Subfolder' : 'Bucket'}
-        hint={buckets.error ? 'Could not list buckets — type the name.' : storage?.type === 'local' ? 'Optional' : undefined}
-      >
-        <Input list={listId} value={bucket} onChange={(e) => onBucket(e.target.value)} required={storage?.type === 's3'} />
-        <datalist id={listId}>
-          {buckets.data?.map((b) => (
-            <option key={b} value={b} />
-          ))}
-        </datalist>
-      </Field>
-      <Field label={prefixLabel} className="sm:col-span-1">
-        <Input value={prefix} onChange={(e) => onPrefix(e.target.value)} placeholder="optional/" />
-      </Field>
-      {prefixHint && <p className="-mt-2 text-xs text-muted-foreground sm:col-span-3">{prefixHint}</p>}
-    </div>
-  )
-}

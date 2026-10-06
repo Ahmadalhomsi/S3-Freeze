@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Cloud, Folder, HardDrive, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
+import { Link } from 'react-router'
+import { BarChart3, CheckCircle2, Cloud, Folder, HardDrive, Pencil, Plus, Trash2, XCircle, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, type Storage, type StorageInput } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useQuickBackup } from '@/components/QuickBackup'
+import { DiskSpace } from '@/components/LocationPicker'
 import {
   Badge,
   Button,
+  buttonVariants,
   Card,
   Dialog,
   DialogContent,
@@ -45,6 +49,7 @@ export default function StoragesPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ['storages'], queryFn: () => api.get<Storage[]>('/api/storages') })
   const [editing, setEditing] = useState<Storage | null | 'new'>(null)
   const [deleting, setDeleting] = useState<Storage | null>(null)
+  const quick = useQuickBackup()
 
   const addButton = (
     <Button onClick={() => setEditing('new')}>
@@ -82,9 +87,11 @@ export default function StoragesPage() {
                     {s.type === 's3' ? <Cloud className="size-4" /> : <Folder className="size-4" />}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{s.name}</p>
-                    <Badge variant="outline" className="mt-0.5">
-                      {s.type === 's3' ? 'S3-compatible' : 'Local disk'}
+                    <Link to={`/storages/${s.id}`} className="block truncate font-medium hover:text-primary">
+                      {s.name}
+                    </Link>
+                    <Badge variant={s.builtin ? 'primary' : 'outline'} className="mt-0.5">
+                      {s.builtin ? 'Built-in · this server' : s.type === 's3' ? 'S3-compatible' : 'Local disk'}
                     </Badge>
                   </div>
                 </div>
@@ -92,9 +99,11 @@ export default function StoragesPage() {
                   <Button variant="ghost" size="icon-sm" title="Edit" onClick={() => setEditing(s)}>
                     <Pencil />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" title="Delete" onClick={() => setDeleting(s)}>
-                    <Trash2 />
-                  </Button>
+                  {!s.builtin && (
+                    <Button variant="ghost" size="icon-sm" title="Delete" onClick={() => setDeleting(s)}>
+                      <Trash2 />
+                    </Button>
+                  )}
                 </div>
               </div>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
@@ -114,6 +123,22 @@ export default function StoragesPage() {
                   </>
                 )}
               </dl>
+              {s.type === 'local' && <DiskSpace storageId={s.id} />}
+              {s.builtin && (
+                <p className="text-xs text-muted-foreground">
+                  Always available as a backup destination. Keep this path on a persistent Docker volume.
+                </p>
+              )}
+              <div className="mt-auto flex gap-2 border-t pt-3">
+                <Link to={`/storages/${s.id}`} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'flex-1')}>
+                  <BarChart3 /> {s.type === 's3' ? 'Buckets & sizes' : 'Folders & sizes'}
+                </Link>
+                {!s.builtin && (
+                  <Button size="sm" className="flex-1" onClick={() => quick({ storage_id: s.id, bucket: '', prefix: '' })}>
+                    <Zap /> Back up
+                  </Button>
+                )}
+              </div>
             </Card>
           ))}
         </div>
@@ -148,7 +173,7 @@ export default function StoragesPage() {
   )
 }
 
-function StorageDialog({ storage, onClose, onSaved }: { storage: Storage | null; onClose: () => void; onSaved: () => void }) {
+export function StorageDialog({ storage, onClose, onSaved }: { storage: Storage | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<StorageInput>(() =>
     storage
       ? {
@@ -215,7 +240,14 @@ function StorageDialog({ storage, onClose, onSaved }: { storage: Storage | null;
             save.mutate()
           }}
         >
-          <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
+          {storage?.builtin && (
+            <div className="rounded-lg bg-muted/60 p-3 text-sm">
+              Built-in storage at <code className="font-mono text-xs">{storage.local_path}</code>. The path comes from the{' '}
+              <code className="font-mono text-xs">BACKUP_DIR</code> setting (<code className="font-mono text-xs">/backups</code> in
+              Docker), so only the name can be changed here.
+            </div>
+          )}
+          <div className={cn('grid grid-cols-2 gap-2 rounded-lg bg-muted p-1', storage?.builtin && 'hidden')}>
             {(['s3', 'local'] as const).map((t) => (
               <button
                 key={t}
@@ -291,7 +323,7 @@ function StorageDialog({ storage, onClose, onSaved }: { storage: Storage | null;
                 />
               </div>
             </>
-          ) : (
+          ) : storage?.builtin ? null : (
             <Field
               label="Directory"
               hint="A path inside the container. Mount a volume there (e.g. /backups) so data survives redeploys. Subfolders act as buckets."
