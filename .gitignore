@@ -4,3 +4,6 @@
 /web/node_modules/
 *.exe
 /s3sync
+.env
+.env
+.env.*
