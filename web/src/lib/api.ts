@@ -10,13 +10,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const res = await fetch(path, {
     method,
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 's3sync' },
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 's3freeze' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const data = await res.json().catch(() => null)
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/api/auth')) {
-      window.dispatchEvent(new Event('s3sync:unauthorized'))
+      window.dispatchEvent(new Event('s3freeze:unauthorized'))
     }
     throw new ApiError(data?.error ?? res.statusText, res.status)
   }

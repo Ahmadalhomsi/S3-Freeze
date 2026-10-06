@@ -28,8 +28,8 @@ export default function App() {
 
   useEffect(() => {
     const onUnauthorized = () => qc.invalidateQueries({ queryKey: ['auth'] })
-    window.addEventListener('s3sync:unauthorized', onUnauthorized)
-    return () => window.removeEventListener('s3sync:unauthorized', onUnauthorized)
+    window.addEventListener('s3freeze:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('s3freeze:unauthorized', onUnauthorized)
   }, [qc])
 
   if (isLoading || !auth) return <Loading />

@@ -6,8 +6,8 @@ import (
 	"io"
 	"sync"
 
-	"s3sync/internal/repo"
-	"s3sync/internal/store"
+	"s3freeze/internal/repo"
+	"s3freeze/internal/store"
 )
 
 const (

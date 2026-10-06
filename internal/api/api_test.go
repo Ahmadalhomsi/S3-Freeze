@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"s3sync/internal/config"
-	"s3sync/internal/engine"
-	"s3sync/internal/scheduler"
-	"s3sync/internal/secret"
-	"s3sync/internal/store"
+	"s3freeze/internal/config"
+	"s3freeze/internal/engine"
+	"s3freeze/internal/scheduler"
+	"s3freeze/internal/secret"
+	"s3freeze/internal/store"
 )
 
 func newTestServer(t *testing.T, cfg *config.Config) (*Server, *httptest.Server) {
@@ -40,7 +40,7 @@ func post(t *testing.T, c *http.Client, url, body string, hdr ...string) *http.R
 	t.Helper()
 	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Requested-With", "s3sync")
+	req.Header.Set("X-Requested-With", "s3freeze")
 	for i := 0; i+1 < len(hdr); i += 2 {
 		req.Header.Set(hdr[i], hdr[i+1])
 	}

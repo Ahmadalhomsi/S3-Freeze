@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"s3sync/internal/repo"
-	"s3sync/internal/storage"
-	"s3sync/internal/store"
+	"s3freeze/internal/repo"
+	"s3freeze/internal/storage"
+	"s3freeze/internal/store"
 )
 
 // Objects up to this size are buffered in memory; larger ones are spooled to disk.

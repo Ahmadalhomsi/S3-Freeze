@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"s3sync/internal/store"
+	"s3freeze/internal/store"
 )
 
 func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {

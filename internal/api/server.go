@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"s3sync/internal/config"
-	"s3sync/internal/engine"
-	"s3sync/internal/scheduler"
-	"s3sync/internal/store"
-	"s3sync/internal/ui"
+	"s3freeze/internal/config"
+	"s3freeze/internal/engine"
+	"s3freeze/internal/scheduler"
+	"s3freeze/internal/store"
+	"s3freeze/internal/ui"
 )
 
 type Server struct {
@@ -108,7 +108,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet && r.Method != http.MethodHead {
-			if r.Header.Get("X-Requested-With") != "s3sync" {
+			if r.Header.Get("X-Requested-With") != "s3freeze" {
 				writeError(w, http.StatusForbidden, "missing X-Requested-With header")
 				return
 			}

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"s3sync/internal/engine"
-	"s3sync/internal/scheduler"
-	"s3sync/internal/store"
+	"s3freeze/internal/engine"
+	"s3freeze/internal/scheduler"
+	"s3freeze/internal/store"
 )
 
 const (
@@ -95,7 +95,7 @@ func (s *Server) applyJob(in *jobInput, j *store.Job) error {
 	// A repository inside the source is skipped during backup (see
 	// engine.RepoExclusion), but it needs its own folder to be separable.
 	if j.SourceStorageID == j.DestStorageID && j.SourceBucket == j.DestBucket && j.DestPrefix == "" {
-		return errors.New("the destination is the backed-up location itself; set a destination folder (e.g. s3sync)")
+		return errors.New("the destination is the backed-up location itself; set a destination folder (e.g. s3freeze)")
 	}
 	if j.Encryption && len(j.Passphrase) < 8 {
 		return errors.New("encryption passphrase must be at least 8 characters")

@@ -1,4 +1,4 @@
-module s3sync
+module s3freeze
 
 go 1.27.1
 

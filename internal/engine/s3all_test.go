@@ -11,9 +11,9 @@ import (
 	"github.com/johannesboyne/gofakes3"
 	"github.com/johannesboyne/gofakes3/backend/s3mem"
 
-	"s3sync/internal/secret"
-	"s3sync/internal/storage"
-	"s3sync/internal/store"
+	"s3freeze/internal/secret"
+	"s3freeze/internal/storage"
+	"s3freeze/internal/store"
 )
 
 func fakeS3(t *testing.T, st *store.Store, name string, buckets ...string) (*store.Storage, storage.Backend) {

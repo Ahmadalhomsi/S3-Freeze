@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"s3sync/internal/secret"
+	"s3freeze/internal/secret"
 )
 
 var ErrNotFound = errors.New("not found")

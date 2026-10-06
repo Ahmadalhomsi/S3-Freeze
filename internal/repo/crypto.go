@@ -17,9 +17,11 @@ import (
 // last-chunk flag. This authenticates chunk order and detects truncation.
 
 const (
-	chunkSize   = 64 << 10
-	prefixSize  = 7
-	tagSize     = 16
+	chunkSize  = 64 << 10
+	prefixSize = 7
+	tagSize    = 16
+	// Format identifier from before the project was renamed; changing it would
+	// make existing encrypted repositories unreadable.
 	keyWrapAAD  = "s3sync-repo-key"
 	kdfArgon2id = "argon2id"
 )

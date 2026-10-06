@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"time"
 
-	"s3sync/internal/storage"
+	"s3freeze/internal/storage"
 )
 
 type Storage struct {

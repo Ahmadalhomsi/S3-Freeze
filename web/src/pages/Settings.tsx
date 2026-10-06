@@ -67,7 +67,7 @@ export default function SettingsPage() {
               contents are stored once, addressed by their hash, so unchanged and duplicate objects take no extra space.
             </p>
             <p>
-              Repositories are self-describing. If you lose this server, deploy S3 Sync again, create a job pointing at the same
+              Repositories are self-describing. If you lose this server, deploy S3 Freeze again, create a job pointing at the same
               destination (with the same passphrase if encrypted), and use <strong className="text-foreground">Scan repository</strong> to
               bring the snapshots back.
             </p>

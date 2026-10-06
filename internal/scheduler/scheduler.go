@@ -10,8 +10,8 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"s3sync/internal/engine"
-	"s3sync/internal/store"
+	"s3freeze/internal/engine"
+	"s3freeze/internal/store"
 )
 
 type Scheduler struct {

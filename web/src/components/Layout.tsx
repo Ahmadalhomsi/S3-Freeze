@@ -1,12 +1,13 @@
 import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { Activity, Database, HardDrive, LayoutDashboard, LogOut, Menu, Moon, Settings, Sun, Archive, X } from 'lucide-react'
+import { Activity, HardDrive, LayoutDashboard, LogOut, Menu, Moon, Settings, Sun, Archive, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui'
 import { Loading } from '@/components/common'
 import { QuickBackupButton } from '@/components/QuickBackup'
+import { LogoMark } from '@/components/LogoMark'
 
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -16,13 +17,13 @@ const nav = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
-export function Logo() {
+export function Logo({ large }: { large?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-        <Database className="size-4" />
-      </div>
-      <span className="text-[15px] font-semibold tracking-tight">S3 Sync</span>
+    <div className={cn('flex items-center', large ? 'gap-3.5' : 'gap-2.5')}>
+      <LogoMark className={cn('shrink-0 drop-shadow-sm', large ? 'size-12' : 'size-8')} />
+      <span className={cn('font-semibold tracking-tight', large ? 'text-3xl' : 'text-[15px]')}>
+        S3 <span className="bg-gradient-to-r from-sky-400 to-blue-600 bg-clip-text text-transparent">Freeze</span>
+      </span>
     </div>
   )
 }

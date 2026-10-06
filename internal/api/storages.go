@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"s3sync/internal/storage"
-	"s3sync/internal/store"
+	"s3freeze/internal/storage"
+	"s3freeze/internal/store"
 )
 
 type storageView struct {

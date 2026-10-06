@@ -30,7 +30,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"s3sync/internal/storage"
+	"s3freeze/internal/storage"
 )
 
 const (

@@ -12,12 +12,12 @@ import (
 	"syscall"
 	"time"
 
-	"s3sync/internal/api"
-	"s3sync/internal/config"
-	"s3sync/internal/engine"
-	"s3sync/internal/scheduler"
-	"s3sync/internal/secret"
-	"s3sync/internal/store"
+	"s3freeze/internal/api"
+	"s3freeze/internal/config"
+	"s3freeze/internal/engine"
+	"s3freeze/internal/scheduler"
+	"s3freeze/internal/secret"
+	"s3freeze/internal/store"
 )
 
 func main() {
@@ -40,7 +40,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	st, err := store.Open(filepath.Join(cfg.DataDir, "s3sync.db"), box)
+	st, err := store.Open(filepath.Join(cfg.DataDir, "s3freeze.db"), box)
 	if err != nil {
 		return err
 	}

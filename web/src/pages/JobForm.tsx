@@ -228,7 +228,7 @@ function JobForm({ job, storages }: { job?: Job; storages: Storage[] }) {
                     <TriangleAlert className="mt-0.5 size-4 shrink-0" />
                     <span>
                       Store this passphrase somewhere safe (e.g. a password manager). Without it, backups cannot be restored — not even
-                      by reinstalling S3 Sync.
+                      by reinstalling S3 Freeze.
                     </span>
                   </div>
                 </>

@@ -14,12 +14,12 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"s3sync/internal/config"
-	"s3sync/internal/store"
+	"s3freeze/internal/config"
+	"s3freeze/internal/store"
 )
 
 const (
-	sessionCookie = "s3sync_session"
+	sessionCookie = "s3freeze_session"
 	sessionTTL    = 7 * 24 * time.Hour
 	minPassword   = 8
 	maxPassword   = 72 // bcrypt limit
@@ -27,7 +27,7 @@ const (
 
 // dummyHash is compared against when a username does not exist, so failed
 // logins take the same time whether or not the user exists.
-var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("s3sync-timing-equalizer"), bcrypt.DefaultCost)
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("s3freeze-timing-equalizer"), bcrypt.DefaultCost)
 
 type ctxKey struct{}
 

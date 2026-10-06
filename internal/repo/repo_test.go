@@ -8,7 +8,7 @@ import (
 	"io"
 	"testing"
 
-	"s3sync/internal/storage"
+	"s3freeze/internal/storage"
 )
 
 func TestEncryptRoundTrip(t *testing.T) {

@@ -11,9 +11,9 @@ import (
 	"github.com/johannesboyne/gofakes3"
 	"github.com/johannesboyne/gofakes3/backend/s3mem"
 
-	"s3sync/internal/secret"
-	"s3sync/internal/storage"
-	"s3sync/internal/store"
+	"s3freeze/internal/secret"
+	"s3freeze/internal/storage"
+	"s3freeze/internal/store"
 )
 
 // TestS3BackupRestore runs a backup and restore against an in-process fake S3
@@ -49,7 +49,7 @@ func TestS3BackupRestore(t *testing.T) {
 	}
 
 	src, _ := be.Bucket("source")
-	big := bytes.Repeat([]byte("s3sync!"), 3<<20) // ~21 MiB, multipart upload when encoded
+	big := bytes.Repeat([]byte("s3freeze!"), 3<<20) // ~21 MiB, multipart upload when encoded
 	objects := map[string][]byte{"img/logo.png": []byte("PNGDATA"), "docs/readme.md": []byte("# hi"), "big.bin": big}
 	for k, v := range objects {
 		err := src.Put(ctx, k, bytes.NewReader(v), int64(len(v)), storage.PutOptions{ContentType: "application/x-test", Metadata: map[string]string{"Owner": "me"}})

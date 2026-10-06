@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"s3sync/internal/repo"
-	"s3sync/internal/storage"
-	"s3sync/internal/store"
+	"s3freeze/internal/repo"
+	"s3freeze/internal/storage"
+	"s3freeze/internal/store"
 )
 
 type RestoreRequest struct {

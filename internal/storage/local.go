@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const tmpPrefix = ".s3sync-tmp-"
+const tmpPrefix = ".s3freeze-tmp-"
 
 // localBackend stores objects as files under a root directory. "Buckets" are
 // first-level subdirectories; an empty bucket name means the root itself.

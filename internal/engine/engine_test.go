@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"s3sync/internal/secret"
-	"s3sync/internal/store"
+	"s3freeze/internal/secret"
+	"s3freeze/internal/store"
 )
 
 type fixture struct {

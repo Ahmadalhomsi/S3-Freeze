@@ -1,7 +1,7 @@
 services:
-  s3sync:
+  s3freeze:
     build: .
-    image: s3sync:latest
+    image: s3freeze:latest
     restart: unless-stopped
     environment:
       # Encrypts stored S3 credentials and passphrases (`openssl rand -hex 32`).
@@ -20,9 +20,9 @@ services:
     expose:
       - "8080"
     volumes:
-      - s3sync-data:/data
+      - s3freeze-data:/data
       # Backups written to the built-in "Server disk" destination.
-      - s3sync-backups:/backups
+      - s3freeze-backups:/backups
     read_only: true
     tmpfs:
       - /tmp
@@ -32,5 +32,5 @@ services:
       - ALL
 
 volumes:
-  s3sync-data:
-  s3sync-backups:
+  s3freeze-data:
+  s3freeze-backups:
