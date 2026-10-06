@@ -1,0 +1,6 @@
+/data/
+/internal/ui/dist/*
+!/internal/ui/dist/.gitkeep
+/web/node_modules/
+*.exe
+/s3sync
