@@ -34,7 +34,13 @@ type Bucket interface {
 	Put(ctx context.Context, key string, r io.Reader, size int64, opts PutOptions) error
 	Delete(ctx context.Context, key string) error
 	Exists(ctx context.Context, key string) (bool, error)
+	// ListDirs returns the immediate "subfolders" (keys ending in "/") under
+	// prefix, which must be empty or end in "/".
+	ListDirs(ctx context.Context, prefix string) ([]string, error)
 }
+
+// maxDirs caps folder listings used for autocomplete.
+const maxDirs = 1000
 
 type Backend interface {
 	Test(ctx context.Context) error

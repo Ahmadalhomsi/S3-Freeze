@@ -82,9 +82,19 @@ func (e *Engine) runBackup(ctx context.Context, rc *runCtx, job *store.Job) erro
 	}
 	rc.logf("Repository contains %d blobs", len(st.blobs))
 
-	rc.logf("Listing source %s/%s", job.SourceBucket, job.SourcePrefix)
+	if job.SourceBucket == "" {
+		rc.logf("Listing all buckets of the source storage")
+	} else {
+		rc.logf("Listing source %s/%s", job.SourceBucket, job.SourcePrefix)
+	}
+	exclude := RepoExclusion(job)
 	var objs []storage.ObjectInfo
+	var excluded int
 	err = src.List(ctx, job.SourcePrefix, func(o storage.ObjectInfo) error {
+		if exclude != "" && strings.HasPrefix(o.Key, exclude) {
+			excluded++
+			return nil
+		}
 		objs = append(objs, o)
 		rc.objectsTotal.Add(1)
 		rc.bytesTotal.Add(o.Size)
@@ -94,6 +104,9 @@ func (e *Engine) runBackup(ctx context.Context, rc *runCtx, job *store.Job) erro
 		return fmt.Errorf("list source: %w", err)
 	}
 	rc.logf("Found %d objects (%s)", len(objs), humanBytes(rc.bytesTotal.Load()))
+	if excluded > 0 {
+		rc.logf("Skipped %d objects of the backup repository itself (%s)", excluded, exclude)
+	}
 
 	entries := make([]repo.Entry, len(objs))
 	ok := make([]bool, len(objs))
@@ -166,6 +179,23 @@ func (e *Engine) runBackup(ctx context.Context, rc *runCtx, job *store.Job) erro
 		m.ID, m.Objects, humanBytes(m.Size), st.reused, st.newBlobs, st.deduped, humanBytes(m.AddedBytes))
 
 	return e.applyRetention(ctx, rc, job, r)
+}
+
+// RepoExclusion returns the key prefix, in the source's key space, under which
+// the job's own repository lives when the repository is inside the source
+// (same storage). Such keys are skipped so backups never include themselves.
+func RepoExclusion(job *store.Job) string {
+	if job.SourceStorageID != job.DestStorageID {
+		return ""
+	}
+	dp := repo.NormalizePrefix(job.DestPrefix)
+	switch {
+	case job.SourceBucket == job.DestBucket:
+		return dp
+	case job.SourceBucket == "":
+		return job.DestBucket + "/" + dp
+	}
+	return ""
 }
 
 func (e *Engine) backupObject(ctx context.Context, rc *runCtx, st *backupState, o storage.ObjectInfo) (repo.Entry, error) {

@@ -60,9 +60,10 @@ func (s *s3Backend) ListBuckets(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
+// Bucket returns one bucket, or with an empty name a view over all buckets.
 func (s *s3Backend) Bucket(name string) (Bucket, error) {
 	if name == "" {
-		return nil, errors.New("bucket name is required for S3 storage")
+		return &s3AllBuckets{s: s, known: map[string]bool{}}, nil
 	}
 	return &s3Bucket{client: s.client, name: name}, nil
 }
@@ -141,6 +142,24 @@ func (b *s3Bucket) Put(ctx context.Context, key string, r io.Reader, size int64,
 	}
 	_, err := b.client.PutObject(ctx, b.name, key, r, size, po)
 	return err
+}
+
+func (b *s3Bucket) ListDirs(ctx context.Context, prefix string) ([]string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var dirs []string
+	for obj := range b.client.ListObjects(ctx, b.name, minio.ListObjectsOptions{Prefix: prefix}) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		if strings.HasSuffix(obj.Key, "/") && obj.Key != prefix {
+			dirs = append(dirs, obj.Key)
+			if len(dirs) >= maxDirs {
+				break
+			}
+		}
+	}
+	return dirs, nil
 }
 
 func (b *s3Bucket) Delete(ctx context.Context, key string) error {

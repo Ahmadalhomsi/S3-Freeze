@@ -117,6 +117,34 @@ func (b *localBucket) List(ctx context.Context, prefix string, fn func(ObjectInf
 	return err
 }
 
+func (b *localBucket) ListDirs(ctx context.Context, prefix string) ([]string, error) {
+	dir := b.dir
+	if prefix != "" {
+		p, err := b.path(prefix)
+		if err != nil {
+			return nil, err
+		}
+		dir = p
+	}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	for _, e := range entries {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+			dirs = append(dirs, prefix+e.Name()+"/")
+			if len(dirs) >= maxDirs {
+				break
+			}
+		}
+	}
+	return dirs, nil
+}
+
 func (b *localBucket) Get(ctx context.Context, key string) (io.ReadCloser, ObjectInfo, error) {
 	p, err := b.path(key)
 	if err != nil {
