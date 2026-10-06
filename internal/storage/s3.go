@@ -14,6 +14,7 @@ import (
 
 type s3Backend struct {
 	client *minio.Client
+	region string
 }
 
 func newS3(c Config) (Backend, error) {
@@ -40,7 +41,7 @@ func newS3(c Config) (Backend, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &s3Backend{client: client}, nil
+	return &s3Backend{client: client, region: c.Region}, nil
 }
 
 func (s *s3Backend) Test(ctx context.Context) error {
@@ -175,4 +176,23 @@ func (b *s3Bucket) Exists(ctx context.Context, key string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// EnsureBucket creates the bucket if it does not exist yet.
+func (s *s3Backend) EnsureBucket(ctx context.Context, name string) error {
+	if name == "" {
+		return nil
+	}
+	exists, err := s.client.BucketExists(ctx, name)
+	if err != nil {
+		return fmt.Errorf("check bucket %s: %w", name, err)
+	}
+	if exists {
+		return nil
+	}
+	err = s.client.MakeBucket(ctx, name, minio.MakeBucketOptions{Region: s.region})
+	if err != nil && minio.ToErrorResponse(err).Code != "BucketAlreadyOwnedByYou" {
+		return fmt.Errorf("create bucket %s: %w", name, err)
+	}
+	return nil
 }

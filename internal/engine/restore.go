@@ -45,6 +45,11 @@ func (e *Engine) StartRestore(jobID int64, snapID string, req RestoreRequest) (i
 	if target.Type == "s3" && req.Bucket == "" && job.SourceBucket != "" {
 		return 0, errors.New("choose a target bucket")
 	}
+	if target.Type == "s3" && req.Bucket != "" {
+		if err := storage.ValidBucketName(req.Bucket); err != nil {
+			return 0, err
+		}
+	}
 	detail := fmt.Sprintf("Restore %s to %s/%s", snapID, req.Bucket, req.Prefix)
 	return e.startRun(jobID, store.KindRestore, detail, func(ctx context.Context, rc *runCtx) error {
 		return e.runRestore(ctx, rc, jobID, snapID, req)
@@ -71,6 +76,9 @@ func (e *Engine) runRestore(ctx context.Context, rc *runCtx, jobID int64, snapID
 	job, err := e.loadJob(jobID)
 	if err != nil {
 		return err
+	}
+	if err := e.ensureBucket(ctx, req.StorageID, req.Bucket); err != nil {
+		return fmt.Errorf("target: %w", err)
 	}
 	dst, err := e.openBucket(req.StorageID, req.Bucket)
 	if err != nil {

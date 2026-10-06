@@ -6,8 +6,6 @@ import (
 	"io"
 	"strings"
 	"sync"
-
-	"github.com/minio/minio-go/v7"
 )
 
 // s3AllBuckets presents every bucket of an S3 service as one key space whose
@@ -100,15 +98,8 @@ func (a *s3AllBuckets) ensureBucket(ctx context.Context, name string) error {
 	if a.known[name] {
 		return nil
 	}
-	exists, err := a.s.client.BucketExists(ctx, name)
-	if err != nil {
+	if err := a.s.EnsureBucket(ctx, name); err != nil {
 		return err
-	}
-	if !exists {
-		err := a.s.client.MakeBucket(ctx, name, minio.MakeBucketOptions{})
-		if err != nil && minio.ToErrorResponse(err).Code != "BucketAlreadyOwnedByYou" {
-			return fmt.Errorf("create bucket %s: %w", name, err)
-		}
 	}
 	a.known[name] = true
 	return nil

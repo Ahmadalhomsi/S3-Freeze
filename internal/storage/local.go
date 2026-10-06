@@ -243,3 +243,12 @@ func (c *ctxReader) Read(p []byte) (int, error) {
 	}
 	return c.r.Read(p)
 }
+
+// EnsureBucket creates the bucket's directory.
+func (l *localBackend) EnsureBucket(ctx context.Context, name string) error {
+	b, err := l.Bucket(name)
+	if err != nil {
+		return err
+	}
+	return os.MkdirAll(b.(*localBucket).dir, 0o755)
+}

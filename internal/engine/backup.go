@@ -56,6 +56,10 @@ func (e *Engine) runBackup(ctx context.Context, rc *runCtx, job *store.Job) erro
 		return fmt.Errorf("source: %w", err)
 	}
 
+	if err := e.ensureBucket(ctx, job.DestStorageID, job.DestBucket); err != nil {
+		return fmt.Errorf("destination: %w", err)
+	}
+
 	unlock := e.lockRepo(job)
 	defer unlock()
 

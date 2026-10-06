@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArchiveRestore, TriangleAlert } from 'lucide-react'
+import { ArchiveRestore, FolderInput, Plus, RotateCcw, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, type Job, type RestoreRequest, type Storage } from '@/lib/api'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, slug } from '@/lib/utils'
+import { useBuckets } from '@/lib/hooks'
 import {
   Button,
   Dialog,
@@ -16,7 +17,7 @@ import {
   SwitchField,
 } from '@/components/ui'
 import { ErrorBox } from '@/components/common'
-import { LocationPicker, type Location } from '@/components/LocationPicker'
+import { LocationPicker, validBucketName, type Location } from '@/components/LocationPicker'
 
 export function RestoreDialog({
   job,
@@ -31,8 +32,24 @@ export function RestoreDialog({
 }) {
   const navigate = useNavigate()
   const { data: storages = [] } = useQuery({ queryKey: ['storages'], queryFn: () => api.get<Storage[]>('/api/storages') })
-  const [mode, setMode] = useState<'original' | 'other'>('original')
+  const [mode, setMode] = useState<'original' | 'new' | 'other'>('original')
   const [target, setTarget] = useState<Location>({ storage_id: job.source_storage_id, bucket: job.source_bucket, prefix: '' })
+  // e.g. "photos-restored-2026-10-07": valid as an S3 bucket name.
+  const newBucketName = `${slug(job.source_bucket || job.name).replace(/[_.]+/g, '-').slice(0, 40) || 'restore'}-restored-${localDate()}`
+  const choose = (m: typeof mode) => {
+    setMode(m)
+    if (m === 'new') setTarget({ storage_id: job.source_storage_id, bucket: newBucketName, prefix: '' })
+    if (m === 'other') setTarget({ storage_id: job.source_storage_id, bucket: job.source_bucket, prefix: '' })
+  }
+  const targetStorage = storages.find((s) => s.id === target.storage_id)
+  const targetBuckets = useBuckets(target.storage_id)
+  // Only names of buckets that will be created need to follow S3 naming rules.
+  const badBucket =
+    mode !== 'original' &&
+    targetStorage?.type === 's3' &&
+    !!target.bucket &&
+    !(targetBuckets.data ?? []).includes(target.bucket) &&
+    !validBucketName(target.bucket)
   const wholeStorage = job.source_bucket === ''
   const [overwrite, setOverwrite] = useState(false)
 
@@ -63,33 +80,39 @@ export function RestoreDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           {(
             [
-              ['original', 'Original location', wholeStorage ? 'Every object back into its original bucket' : `${job.source_bucket} — same keys as when backed up`],
-              ['other', 'Different location', 'Any storage, bucket and folder'],
+              ['original', RotateCcw, 'Original location', wholeStorage ? 'Every object back into its own bucket' : `Back into ${job.source_bucket}`],
+              ['new', Plus, 'New bucket', 'Restore side by side into a fresh bucket'],
+              ['other', FolderInput, 'Other location', 'Any storage, existing bucket or folder'],
             ] as const
-          ).map(([value, title, desc]) => (
+          ).map(([value, Icon, title, desc]) => (
             <button
               key={value}
               type="button"
-              onClick={() => setMode(value)}
+              onClick={() => choose(value)}
               className={cn(
                 'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors',
                 mode === value ? 'border-primary bg-accent/60 ring-1 ring-primary' : 'hover:bg-muted',
               )}
             >
-              <span className="text-sm font-medium">{title}</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                <Icon className={cn('size-4', mode === value ? 'text-primary' : 'text-muted-foreground')} />
+                {title}
+              </span>
               <span className="text-xs text-muted-foreground">{desc}</span>
             </button>
           ))}
         </div>
 
-        {mode === 'other' && (
+        {mode !== 'original' && (
           <LocationPicker
+            key={mode}
             storages={storages}
             value={target}
             onChange={setTarget}
+            newBucketSuggestion={newBucketName}
             bucketRequired={wholeStorage ? false : undefined}
             bucketHint={wholeStorage ? 'Leave empty to restore each bucket under its original name (missing buckets are created).' : undefined}
             folderLabel="Into folder"
@@ -118,11 +141,17 @@ export function RestoreDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button loading={restore.isPending} onClick={() => restore.mutate()}>
+          <Button loading={restore.isPending} disabled={badBucket} onClick={() => restore.mutate()}>
             <ArchiveRestore /> Start restore
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
+}
+
+/** Today's date in the viewer's time zone, as YYYY-MM-DD. */
+function localDate(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }

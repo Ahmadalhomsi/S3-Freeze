@@ -21,7 +21,7 @@ import (
 func TestS3BackupRestore(t *testing.T) {
 	ctx := context.Background()
 	mem := s3mem.New()
-	for _, b := range []string{"source", "backups", "restored"} {
+	for _, b := range []string{"source", "backups"} {
 		if err := mem.CreateBucket(b); err != nil {
 			t.Fatal(err)
 		}
@@ -73,12 +73,12 @@ func TestS3BackupRestore(t *testing.T) {
 		t.Fatalf("unchanged second run uploaded %d bytes", r.BytesUploaded)
 	}
 
-	id, err := f.eng.StartRestore(job.ID, r.SnapshotID, RestoreRequest{StorageID: s3.ID, Bucket: "restored"})
+	id, err := f.eng.StartRestore(job.ID, r.SnapshotID, RestoreRequest{StorageID: s3.ID, Bucket: "brand-new-bucket"}) // bucket is created on demand
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.wait(id)
-	dst, _ := be.Bucket("restored")
+	dst, _ := be.Bucket("brand-new-bucket")
 	for k, v := range objects {
 		rd, info, err := dst.Get(ctx, k)
 		if err != nil {

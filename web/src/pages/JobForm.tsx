@@ -188,6 +188,7 @@ function JobForm({ job, storages }: { job?: Job; storages: Storage[] }) {
                   setForm((f) => ({ ...f, dest_storage_id: v.storage_id, dest_bucket: v.bucket, dest_prefix: switched ? f.dest_prefix : v.prefix }))
                 }}
                 folderHint="Folder that holds the repository. Named after the source by default."
+                newBucketSuggestion="s3freeze-backups"
               />
             </CardContent>
           </Card>

@@ -362,3 +362,20 @@ func humanBytes(n int64) string {
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
+
+// ensureBucket creates the bucket on a storage if it does not exist yet, so
+// backups and restores can target new buckets.
+func (e *Engine) ensureBucket(ctx context.Context, storageID int64, bucket string) error {
+	if bucket == "" {
+		return nil
+	}
+	st, err := e.store.GetStorage(storageID)
+	if err != nil {
+		return err
+	}
+	be, err := storage.New(st.Config())
+	if err != nil {
+		return err
+	}
+	return be.EnsureBucket(ctx, bucket)
+}

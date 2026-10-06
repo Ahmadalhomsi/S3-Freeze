@@ -218,6 +218,7 @@ function QuickBackupForm({ storages, initial, onClose }: { storages: Storage[]; 
                 setOther(v)
               }}
               folderHint="Snapshots are stored in this folder (a repository). Reusing it deduplicates across backups."
+              newBucketSuggestion="s3freeze-backups"
             />
             {other.storage_id === src.storage_id && (
               <p className="text-xs text-muted-foreground">

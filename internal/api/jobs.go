@@ -9,6 +9,7 @@ import (
 
 	"s3freeze/internal/engine"
 	"s3freeze/internal/scheduler"
+	"s3freeze/internal/storage"
 	"s3freeze/internal/store"
 )
 
@@ -91,6 +92,11 @@ func (s *Server) applyJob(in *jobInput, j *store.Job) error {
 	}
 	if dst.Type == "s3" && j.DestBucket == "" {
 		return errors.New("destination bucket is required")
+	}
+	if dst.Type == "s3" {
+		if err := storage.ValidBucketName(j.DestBucket); err != nil {
+			return err
+		}
 	}
 	// A repository inside the source is skipped during backup (see
 	// engine.RepoExclusion), but it needs its own folder to be separable.

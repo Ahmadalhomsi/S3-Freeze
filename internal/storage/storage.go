@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -46,6 +48,8 @@ type Backend interface {
 	Test(ctx context.Context) error
 	ListBuckets(ctx context.Context) ([]string, error)
 	Bucket(name string) (Bucket, error)
+	// EnsureBucket creates the bucket if it does not exist (a no-op for "").
+	EnsureBucket(ctx context.Context, name string) error
 }
 
 type Config struct {
@@ -68,4 +72,14 @@ func New(c Config) (Backend, error) {
 	default:
 		return nil, fmt.Errorf("unknown storage type %q", c.Type)
 	}
+}
+
+var bucketNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+
+// ValidBucketName reports whether name follows the S3 bucket naming rules.
+func ValidBucketName(name string) error {
+	if !bucketNameRe.MatchString(name) || strings.Contains(name, "..") {
+		return fmt.Errorf("invalid bucket name %q: use 3-63 lowercase letters, numbers, dots and hyphens", name)
+	}
+	return nil
 }

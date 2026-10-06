@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Cloud, Database, Folder, FolderOpen, Layers, Loader2 } from 'lucide-react'
+import { Cloud, Database, Folder, FolderOpen, Layers, Loader2, Plus } from 'lucide-react'
 import type { Storage } from '@/lib/api'
 import { useBuckets, useDisk, useFolders, useUsage } from '@/lib/hooks'
 import { cn, formatBytes, formatNumber } from '@/lib/utils'
@@ -28,6 +28,8 @@ interface Props {
   bucketHint?: string
   folderLabel?: string
   folderHint?: string
+  /** Enables creating a bucket that does not exist yet; used as the suggested name. */
+  newBucketSuggestion?: string
 }
 
 export function LocationPicker({
@@ -40,6 +42,7 @@ export function LocationPicker({
   bucketHint,
   folderLabel = 'Folder',
   folderHint,
+  newBucketSuggestion,
 }: Props) {
   const storage = storages.find((s) => s.id === value.storage_id)
   const isLocal = storage?.type === 'local'
@@ -49,6 +52,17 @@ export function LocationPicker({
   const folders = useFolders(value.storage_id, value.bucket, value.prefix, showBucket && (isLocal || !!value.bucket))
 
   const set = (patch: Partial<Location>) => onChange({ ...value, ...patch })
+
+  const canCreate = !!newBucketSuggestion && !isLocal
+  const isNew = canCreate && !!value.bucket && !!buckets.data && !buckets.data.includes(value.bucket)
+  const invalidName = isNew && !validBucketName(value.bucket)
+  const bucketStatus = isNew ? (
+    invalidName ? (
+      <span className="text-destructive">Use 3–63 lowercase letters, numbers, dots and hyphens.</span>
+    ) : (
+      <span className="text-success">New bucket — it will be created.</span>
+    )
+  ) : null
 
   // Pick the first bucket when one is required and none is chosen yet.
   useEffect(() => {
@@ -107,14 +121,27 @@ export function LocationPicker({
       {showBucket && (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label={isLocal ? 'Subfolder' : 'Bucket'}
-            hint={buckets.error ? 'Could not list buckets — type the name.' : bucketHint ?? (isLocal ? 'Optional' : undefined)}
+            label={
+              <span className="flex items-center justify-between gap-2">
+                {isLocal ? 'Subfolder' : 'Bucket'}
+                {canCreate && (
+                  <button
+                    type="button"
+                    onClick={() => set({ bucket: newBucketSuggestion, prefix: '' })}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    <Plus className="size-3.5" /> New bucket
+                  </button>
+                )}
+              </span>
+            }
+            hint={bucketStatus ?? (buckets.error ? 'Could not list buckets — type the name.' : bucketHint ?? (isLocal ? 'Optional' : undefined))}
           >
             <Combobox
               value={value.bucket}
               onChange={(v) => set({ bucket: v, prefix: '' })}
               loading={buckets.isFetching}
-              placeholder={isLocal ? 'Optional subfolder…' : 'Select or type a bucket…'}
+              placeholder={isLocal ? 'Optional subfolder…' : canCreate ? 'Select a bucket or type a new name…' : 'Select or type a bucket…'}
               required={bucketRequired ?? !isLocal}
               icon={<Database />}
               emptyText={isLocal ? 'No subfolders' : 'No buckets'}
@@ -186,4 +213,9 @@ export function DiskSpace({ storageId, className }: { storageId: number; classNa
       </p>
     </div>
   )
+}
+
+/** S3 bucket naming rules (3-63 chars, lowercase letters, digits, dots, hyphens). */
+export function validBucketName(name: string): boolean {
+  return /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(name) && !name.includes('..')
 }
