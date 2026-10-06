@@ -81,12 +81,9 @@ func (s *Server) applyJob(in *jobInput, j *store.Job) error {
 			return fmt.Errorf("invalid schedule: %v", err)
 		}
 	}
-	src, err := s.store.GetStorage(j.SourceStorageID)
-	if err != nil {
+	// An empty source bucket means the whole storage (every bucket).
+	if _, err := s.store.GetStorage(j.SourceStorageID); err != nil {
 		return errors.New("source storage not found")
-	}
-	if src.Type == "s3" && j.SourceBucket == "" {
-		return errors.New("source bucket is required")
 	}
 	dst, err := s.store.GetStorage(j.DestStorageID)
 	if err != nil {
@@ -95,11 +92,10 @@ func (s *Server) applyJob(in *jobInput, j *store.Job) error {
 	if dst.Type == "s3" && j.DestBucket == "" {
 		return errors.New("destination bucket is required")
 	}
-	if j.SourceStorageID == j.DestStorageID && j.SourceBucket == j.DestBucket {
-		sp, dp := j.SourcePrefix, j.DestPrefix+"/"
-		if sp == "" || strings.HasPrefix(dp, sp) {
-			return errors.New("destination is inside the backed-up source; choose a different bucket or prefix")
-		}
+	// A repository inside the source is skipped during backup (see
+	// engine.RepoExclusion), but it needs its own folder to be separable.
+	if j.SourceStorageID == j.DestStorageID && j.SourceBucket == j.DestBucket && j.DestPrefix == "" {
+		return errors.New("the destination is the backed-up location itself; set a destination folder (e.g. s3sync)")
 	}
 	if j.Encryption && len(j.Passphrase) < 8 {
 		return errors.New("encryption passphrase must be at least 8 characters")
@@ -363,4 +359,80 @@ func (s *Server) deleteSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]int64{"run_id": runID})
+}
+
+type quickBackupInput struct {
+	SourceStorageID int64  `json:"source_storage_id"`
+	SourceBucket    string `json:"source_bucket"`
+	SourcePrefix    string `json:"source_prefix"`
+	DestStorageID   int64  `json:"dest_storage_id"`
+	DestBucket      string `json:"dest_bucket"`
+	DestPrefix      string `json:"dest_prefix"`
+	Encryption      bool   `json:"encryption"`
+	Passphrase      string `json:"passphrase"`
+}
+
+// quickBackup takes a snapshot right away. Snapshots always belong to a job
+// (that is where they are listed and restored from), so it reuses the manual
+// job for the same source and destination, or creates one without a schedule.
+func (s *Server) quickBackup(w http.ResponseWriter, r *http.Request) {
+	var in quickBackupInput
+	if err := decode(r, &in); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	src, err := s.store.GetStorage(in.SourceStorageID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "source storage not found")
+		return
+	}
+	name := src.Name + " · "
+	switch {
+	case in.SourceBucket == "" && src.Type == "s3":
+		name += "all buckets"
+	case in.SourceBucket == "":
+		name += "entire directory"
+	default:
+		name += in.SourceBucket
+	}
+	if p := strings.Trim(in.SourcePrefix, "/"); p != "" {
+		name += "/" + p
+	}
+	j := &store.Job{}
+	err = s.applyJob(&jobInput{
+		Name: name, Enabled: true,
+		SourceStorageID: in.SourceStorageID, SourceBucket: in.SourceBucket, SourcePrefix: in.SourcePrefix,
+		DestStorageID: in.DestStorageID, DestBucket: in.DestBucket, DestPrefix: in.DestPrefix,
+		Compression: true, Encryption: in.Encryption, Passphrase: in.Passphrase, Concurrency: 8,
+	}, j)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jobs, err := s.store.ListJobs()
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	existing := false
+	for _, o := range jobs {
+		if o.SourceStorageID == j.SourceStorageID && o.SourceBucket == j.SourceBucket && o.SourcePrefix == j.SourcePrefix &&
+			o.DestStorageID == j.DestStorageID && o.DestBucket == j.DestBucket && o.DestPrefix == j.DestPrefix {
+			j, existing = o, true
+			break
+		}
+	}
+	if !existing {
+		if err := s.store.CreateJob(j); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	runID, err := s.eng.StartBackup(j.ID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": j.ID, "job_name": j.Name, "run_id": runID, "existing_job": existing})
 }

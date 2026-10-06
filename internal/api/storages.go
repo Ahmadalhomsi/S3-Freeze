@@ -107,6 +107,10 @@ func (s *Server) updateStorage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if st.Builtin {
+		// The built-in disk always points at BACKUP_DIR; only its name can change.
+		in.Type, in.LocalPath = "local", st.LocalPath
+	}
 	if err := in.apply(st); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -122,6 +126,10 @@ func (s *Server) deleteStorage(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(r, "id")
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if st, err := s.store.GetStorage(id); err == nil && st.Builtin {
+		writeError(w, http.StatusConflict, "the built-in server disk cannot be deleted")
 		return
 	}
 	inUse, err := s.store.StorageInUse(id)
@@ -206,4 +214,104 @@ func (s *Server) listBuckets(w http.ResponseWriter, r *http.Request) {
 		buckets = []string{}
 	}
 	writeJSON(w, http.StatusOK, buckets)
+}
+
+func (s *Server) openStorageBucket(r *http.Request) (storage.Bucket, error) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		return nil, errors.New("invalid id")
+	}
+	st, err := s.store.GetStorage(id)
+	if err != nil {
+		return nil, err
+	}
+	be, err := storage.New(st.Config())
+	if err != nil {
+		return nil, err
+	}
+	return be.Bucket(r.URL.Query().Get("bucket"))
+}
+
+// listFolders returns the subfolders directly under ?prefix= (for autocomplete).
+func (s *Server) listFolders(w http.ResponseWriter, r *http.Request) {
+	b, err := s.openStorageBucket(r)
+	if err != nil {
+		writeStorageErr(w, err)
+		return
+	}
+	prefix := r.URL.Query().Get("prefix")
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix = prefix[:strings.LastIndex(prefix, "/")+1]
+	}
+	ctx, cancel := timeoutCtx(r, 15*time.Second)
+	defer cancel()
+	dirs, err := b.ListDirs(ctx, prefix)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if dirs == nil {
+		dirs = []string{}
+	}
+	sort.Strings(dirs)
+	writeJSON(w, http.StatusOK, dirs)
+}
+
+// usage counts objects and bytes under ?bucket=&prefix= (empty bucket = all
+// buckets). Very large listings stop after a time limit and are marked partial.
+func (s *Server) storageUsage(w http.ResponseWriter, r *http.Request) {
+	b, err := s.openStorageBucket(r)
+	if err != nil {
+		writeStorageErr(w, err)
+		return
+	}
+	ctx, cancel := timeoutCtx(r, 90*time.Second)
+	defer cancel()
+	var objects, size int64
+	err = b.List(ctx, r.URL.Query().Get("prefix"), func(o storage.ObjectInfo) error {
+		objects++
+		size += o.Size
+		return nil
+	})
+	partial := false
+	if err != nil {
+		if ctx.Err() == nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		partial = true
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"objects": objects, "size": size, "partial": partial})
+}
+
+func writeStorageErr(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, err)
+		return
+	}
+	writeError(w, http.StatusBadRequest, err.Error())
+}
+
+// storageDisk reports free space for local-disk storages.
+func (s *Server) storageDisk(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	st, err := s.store.GetStorage(id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if st.Type != "local" {
+		writeError(w, http.StatusBadRequest, "not a local storage")
+		return
+	}
+	total, free, err := storage.DiskUsage(st.LocalPath)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"path": st.LocalPath, "total": total, "free": free})
 }
