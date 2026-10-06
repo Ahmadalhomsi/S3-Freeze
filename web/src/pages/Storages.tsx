@@ -20,17 +20,78 @@ import {
   DialogTitle,
   Field,
   Input,
+  Label,
+  Select,
   SwitchField,
 } from '@/components/ui'
 import { ConfirmDialog, EmptyState, ErrorBox, Loading, PageHeader } from '@/components/common'
 
-const presets: { id: string; label: string; endpoint: string; region: string; pathStyle: boolean; ssl: boolean; hint: string }[] = [
-  { id: 'minio', label: 'MinIO', endpoint: 'http://minio:9000', region: 'us-east-1', pathStyle: true, ssl: false, hint: 'e.g. http://minio:9000 or https://minio.example.com' },
-  { id: 'seaweed', label: 'SeaweedFS', endpoint: 'http://seaweedfs:8333', region: 'us-east-1', pathStyle: true, ssl: false, hint: 'The SeaweedFS S3 gateway, usually on port 8333' },
-  { id: 'aws', label: 'AWS S3', endpoint: 'https://s3.amazonaws.com', region: 'us-east-1', pathStyle: false, ssl: true, hint: 'Use the regional endpoint, e.g. https://s3.eu-central-1.amazonaws.com' },
-  { id: 'r2', label: 'Cloudflare R2', endpoint: 'https://<account-id>.r2.cloudflarestorage.com', region: 'auto', pathStyle: true, ssl: true, hint: 'Found in R2 → Manage API tokens' },
-  { id: 'other', label: 'Other', endpoint: '', region: 'us-east-1', pathStyle: true, ssl: true, hint: 'Any S3-compatible endpoint (Backblaze B2, Wasabi, Garage, Ceph…)' },
+type Proto = 'https' | 'http'
+
+interface Preset {
+  id: string
+  label: string
+  proto: Proto
+  host: string
+  port: string
+  placeholder: string
+  region: string
+  pathStyle: boolean
+  hint: string
+}
+
+const presets: Preset[] = [
+  {
+    id: 'seaweed', label: 'SeaweedFS', proto: 'https', host: '', port: '', placeholder: 's3.example.com', region: 'us-east-1', pathStyle: true,
+    hint: 'Your SeaweedFS S3 gateway. Inside the same Docker network use HTTP, host seaweedfs and port 8333.',
+  },
+  {
+    id: 'minio', label: 'MinIO', proto: 'https', host: '', port: '', placeholder: 'minio.example.com', region: 'us-east-1', pathStyle: true,
+    hint: 'Your MinIO API. Inside the same Docker network use HTTP, host minio and port 9000.',
+  },
+  {
+    id: 'aws', label: 'AWS S3', proto: 'https', host: 's3.us-east-1.amazonaws.com', port: '', placeholder: 's3.us-east-1.amazonaws.com', region: 'us-east-1', pathStyle: false,
+    hint: 'Use the endpoint of your bucket region, e.g. s3.eu-central-1.amazonaws.com.',
+  },
+  {
+    id: 'r2', label: 'Cloudflare R2', proto: 'https', host: '', port: '', placeholder: '<account-id>.r2.cloudflarestorage.com', region: 'auto', pathStyle: true,
+    hint: 'Found in Cloudflare → R2 → Manage API tokens.',
+  },
+  {
+    id: 'other', label: 'Other', proto: 'https', host: '', port: '', placeholder: 's3.example.com', region: 'us-east-1', pathStyle: true,
+    hint: 'Any S3-compatible endpoint: Backblaze B2, Wasabi, Garage, Ceph…',
+  },
 ]
+
+const defaultPort = (p: Proto) => (p === 'https' ? '443' : '80')
+
+/** Splits "https://host:9000/x" (or a bare host) into protocol, host and port. */
+function splitEndpoint(endpoint: string, fallback: Proto): { proto: Proto; host: string; port: string } {
+  let s = endpoint.trim()
+  let proto = fallback
+  const scheme = s.match(/^(https?):\/\//i)
+  if (scheme) {
+    proto = scheme[1].toLowerCase() as Proto
+    s = s.slice(scheme[0].length)
+  }
+  s = s.replace(/\/.*$/, '')
+  let host = s
+  let port = ''
+  const m = s.match(/^(.*):(\d+)$/)
+  if (m) {
+    host = m[1]
+    port = m[2]
+  }
+  if (port === defaultPort(proto)) port = ''
+  return { proto, host, port }
+}
+
+function joinEndpoint(proto: Proto, host: string, port: string): string {
+  const h = host.trim()
+  const p = port.trim()
+  if (!h) return ''
+  return `${proto}://${h}${p && p !== defaultPort(proto) ? `:${p}` : ''}`
+}
 
 const emptyInput: StorageInput = {
   name: '',
@@ -187,17 +248,30 @@ export function StorageDialog({ storage, onClose, onSaved }: { storage: Storage 
           path_style: storage.path_style,
           local_path: storage.local_path || emptyInput.local_path,
         }
-      :{ ...emptyInput, name: 'MinIO', endpoint: presets[0].endpoint, use_ssl: false },
+      : { ...emptyInput, name: presets[0].label, region: presets[0].region, path_style: presets[0].pathStyle },
   )
-  const [preset, setPreset] = useState(storage ? 'other' : 'minio')
+  // The endpoint is edited as protocol + host + port and joined on save.
+  const [conn, setConn] = useState(() =>
+    storage
+      ? splitEndpoint(storage.endpoint, storage.use_ssl ? 'https' : 'http')
+      : { proto: presets[0].proto, host: presets[0].host, port: presets[0].port },
+  )
+  const [preset, setPreset] = useState(storage ? 'other' : presets[0].id)
   const [test, setTest] = useState<{ ok: boolean; error?: string; buckets?: number } | null>(null)
   const set = <K extends keyof StorageInput>(k: K, v: StorageInput[K]) => {
     setForm((f) => ({ ...f, [k]: v }))
     setTest(null)
   }
+  const setConnField = (patch: Partial<typeof conn>) => {
+    setConn((c) => ({ ...c, ...patch }))
+    setTest(null)
+  }
+
+  const endpoint = joinEndpoint(conn.proto, conn.host, conn.port)
+  const payload = (): StorageInput => (form.type === 's3' ? { ...form, endpoint, use_ssl: conn.proto === 'https' } : form)
 
   const save = useMutation({
-    mutationFn: () => (storage ? api.put(`/api/storages/${storage.id}`, form) : api.post('/api/storages', form)),
+    mutationFn: () => (storage ? api.put(`/api/storages/${storage.id}`, payload()) : api.post('/api/storages', payload())),
     onSuccess: () => {
       toast.success(storage ? 'Storage updated' : 'Storage added')
       onSaved()
@@ -205,7 +279,7 @@ export function StorageDialog({ storage, onClose, onSaved }: { storage: Storage 
     },
   })
   const testConn = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; error?: string; buckets?: number }>('/api/storages/test', { ...form, id: storage?.id ?? 0 }),
+    mutationFn: () => api.post<{ ok: boolean; error?: string; buckets?: number }>('/api/storages/test', { ...payload(), id: storage?.id ?? 0 }),
     onSuccess: setTest,
     onError: (e) => setTest({ ok: false, error: e.message }),
   })
@@ -216,11 +290,10 @@ export function StorageDialog({ storage, onClose, onSaved }: { storage: Storage 
     setForm((f) => ({
       ...f,
       name: !f.name || presets.some((x) => x.label === f.name) ? p.label : f.name,
-      endpoint: p.endpoint,
       region: p.region,
       path_style: p.pathStyle,
-      use_ssl: p.ssl,
     }))
+    setConn({ proto: p.proto, host: p.host, port: p.port })
     setTest(null)
   }
   const currentPreset = presets.find((p) => p.id === preset) ?? presets[presets.length - 1]
@@ -283,14 +356,57 @@ export function StorageDialog({ storage, onClose, onSaved }: { storage: Storage 
           )}
 
           <Field label="Name">
-            <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Production MinIO" required />
+            <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Production SeaweedFS" required />
           </Field>
 
           {form.type === 's3' ? (
             <>
-              <Field label="Endpoint" hint={currentPreset.hint}>
-                <Input value={form.endpoint} onChange={(e) => set('endpoint', e.target.value)} placeholder="https://s3.example.com" required />
-              </Field>
+              <div className="flex flex-col gap-1.5">
+                <Label>Endpoint</Label>
+                <div className="grid grid-cols-[7.5rem_1fr_6rem] gap-2">
+                  <Select
+                    aria-label="Protocol"
+                    value={conn.proto}
+                    onChange={(e) => {
+                      const proto = e.target.value as Proto
+                      // A port that was the old protocol's default follows the new one.
+                      setConnField({ proto, port: conn.port === defaultPort(conn.proto) ? '' : conn.port })
+                    }}
+                  >
+                    <option value="https">HTTPS</option>
+                    <option value="http">HTTP</option>
+                  </Select>
+                  <Input
+                    aria-label="Host"
+                    value={conn.host}
+                    placeholder={currentPreset.placeholder}
+                    required
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      // Pasting a full URL fills protocol, host and port at once.
+                      if (/^https?:\/\//i.test(v) || /:\d+$/.test(v)) setConnField(splitEndpoint(v, conn.proto))
+                      else setConnField({ host: v })
+                    }}
+                  />
+                  <Input
+                    aria-label="Port"
+                    value={conn.port}
+                    placeholder={defaultPort(conn.proto)}
+                    inputMode="numeric"
+                    onChange={(e) => setConnField({ port: e.target.value.replace(/\D/g, '').slice(0, 5) })}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {currentPreset.hint} Leave the port empty to use the default ({defaultPort(conn.proto)}).
+                </p>
+                {endpoint && (
+                  <p className="text-xs text-muted-foreground">
+                    Connects to <code className="font-mono text-foreground">{endpoint}</code>
+                  </p>
+                )}
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Access key">
                   <Input value={form.access_key} onChange={(e) => set('access_key', e.target.value)} autoComplete="off" />
@@ -308,16 +424,10 @@ export function StorageDialog({ storage, onClose, onSaved }: { storage: Storage 
               <Field label="Region" hint="Most self-hosted services accept us-east-1.">
                 <Input value={form.region} onChange={(e) => set('region', e.target.value)} />
               </Field>
-              <div className="flex flex-col gap-4 rounded-lg border p-4">
-                <SwitchField
-                  label="Use HTTPS"
-                  description="Ignored when the endpoint starts with http:// or https://."
-                  checked={form.use_ssl}
-                  onCheckedChange={(v) => set('use_ssl', v)}
-                />
+              <div className="rounded-lg border p-4">
                 <SwitchField
                   label="Path-style addressing"
-                  description="Required by MinIO, SeaweedFS and most self-hosted services."
+                  description="Required by SeaweedFS, MinIO and most self-hosted services."
                   checked={form.path_style}
                   onCheckedChange={(v) => set('path_style', v)}
                 />
