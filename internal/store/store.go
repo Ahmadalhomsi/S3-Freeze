@@ -108,6 +108,10 @@ func Open(path string, box *secret.Box) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
+	if err := addColumn(db, "storages", "builtin", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate database: %w", err)
+	}
 	return &Store{db: db, box: box}, nil
 }
 
@@ -139,4 +143,25 @@ func b2i(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// addColumn adds a column to an existing table if it is missing.
+func addColumn(db *sql.DB, table, column, def string) error {
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	rows.Close()
+	_, err = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, def))
+	return err
 }

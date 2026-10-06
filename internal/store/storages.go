@@ -1,22 +1,25 @@
 package store
 
 import (
+	"database/sql"
 	"time"
 
 	"s3sync/internal/storage"
 )
 
 type Storage struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Type      string    `json:"type"`
-	Endpoint  string    `json:"endpoint"`
-	Region    string    `json:"region"`
-	AccessKey string    `json:"access_key"`
-	SecretKey string    `json:"-"`
-	UseSSL    bool      `json:"use_ssl"`
-	PathStyle bool      `json:"path_style"`
-	LocalPath string    `json:"local_path"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Endpoint  string `json:"endpoint"`
+	Region    string `json:"region"`
+	AccessKey string `json:"access_key"`
+	SecretKey string `json:"-"`
+	UseSSL    bool   `json:"use_ssl"`
+	PathStyle bool   `json:"path_style"`
+	LocalPath string `json:"local_path"`
+	// Builtin marks the always-present "Server disk" storage (BACKUP_DIR).
+	Builtin   bool      `json:"builtin"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -34,14 +37,14 @@ func (s *Storage) Config() storage.Config {
 	}
 }
 
-const storageCols = `id, name, type, endpoint, region, access_key, secret_key, use_ssl, path_style, local_path, created_at, updated_at`
+const storageCols = `id, name, type, endpoint, region, access_key, secret_key, use_ssl, path_style, local_path, created_at, updated_at, builtin`
 
 func (s *Store) scanStorage(sc interface{ Scan(...any) error }) (*Storage, error) {
 	var st Storage
 	var secretKey string
 	var created, updated int64
 	if err := sc.Scan(&st.ID, &st.Name, &st.Type, &st.Endpoint, &st.Region, &st.AccessKey, &secretKey,
-		&st.UseSSL, &st.PathStyle, &st.LocalPath, &created, &updated); err != nil {
+		&st.UseSSL, &st.PathStyle, &st.LocalPath, &created, &updated, &st.Builtin); err != nil {
 		return nil, err
 	}
 	var err error
@@ -53,7 +56,7 @@ func (s *Store) scanStorage(sc interface{ Scan(...any) error }) (*Storage, error
 }
 
 func (s *Store) ListStorages() ([]*Storage, error) {
-	rows, err := s.db.Query(`SELECT ` + storageCols + ` FROM storages ORDER BY name`)
+	rows, err := s.db.Query(`SELECT ` + storageCols + ` FROM storages ORDER BY builtin DESC, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -111,5 +114,23 @@ func (s *Store) StorageInUse(id int64) (bool, error) {
 
 func (s *Store) DeleteStorage(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM storages WHERE id = ?`, id)
+	return err
+}
+
+// EnsureBuiltinStorage creates or updates the built-in local storage that
+// points at the server's backup directory (a Docker volume in production).
+func (s *Store) EnsureBuiltinStorage(path string) error {
+	var id int64
+	err := s.db.QueryRow(`SELECT id FROM storages WHERE builtin = 1`).Scan(&id)
+	if err == nil {
+		_, err = s.db.Exec(`UPDATE storages SET type = 'local', local_path = ? WHERE id = ?`, path, id)
+		return err
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	t := now()
+	_, err = s.db.Exec(`INSERT INTO storages(name, type, local_path, use_ssl, path_style, created_at, updated_at, builtin)
+		VALUES('Server disk', 'local', ?, 0, 0, ?, ?, 1)`, path, t, t)
 	return err
 }

@@ -25,8 +25,9 @@ COPY --from=build /out/s3sync /s3sync
 COPY --from=build --chown=nonroot:nonroot /out/data /data
 COPY --from=build --chown=nonroot:nonroot /out/backups /backups
 ENV DATA_DIR=/data \
+    BACKUP_DIR=/backups \
     PORT=8080
 EXPOSE 8080
-VOLUME ["/data"]
+VOLUME ["/data", "/backups"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/s3sync", "healthcheck"]
 ENTRYPOINT ["/s3sync"]
