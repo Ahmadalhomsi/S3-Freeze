@@ -32,8 +32,18 @@ func (e *Engine) StartRestore(jobID int64, snapID string, req RestoreRequest) (i
 	if _, err := e.store.GetSnapshot(jobID, snapID); err != nil {
 		return 0, err
 	}
-	if _, err := e.store.GetStorage(req.StorageID); err != nil {
+	target, err := e.store.GetStorage(req.StorageID)
+	if err != nil {
 		return 0, fmt.Errorf("target storage: %w", err)
+	}
+	job, err := e.loadJob(jobID)
+	if err != nil {
+		return 0, err
+	}
+	// Restoring to an S3 storage without a bucket recreates the original
+	// buckets, which only makes sense for whole-storage snapshots.
+	if target.Type == "s3" && req.Bucket == "" && job.SourceBucket != "" {
+		return 0, errors.New("choose a target bucket")
 	}
 	detail := fmt.Sprintf("Restore %s to %s/%s", snapID, req.Bucket, req.Prefix)
 	return e.startRun(jobID, store.KindRestore, detail, func(ctx context.Context, rc *runCtx) error {
@@ -218,53 +228,4 @@ func (e *Engine) Browse(ctx context.Context, jobID int64, snapID, dir string) (*
 	sort.Slice(l.Dirs, func(i, j int) bool { return l.Dirs[i].Name < l.Dirs[j].Name })
 	sort.Slice(l.Files, func(i, j int) bool { return l.Files[i].Name < l.Files[j].Name })
 	return l, nil
-}
-
-const manifestCacheSize = 4
-
-func (e *Engine) manifest(ctx context.Context, jobID int64, snapID string) (*repo.Manifest, error) {
-	key := fmt.Sprintf("%d/%s", jobID, snapID)
-	e.cacheMu.Lock()
-	for _, c := range e.manifests {
-		if c.key == key {
-			e.cacheMu.Unlock()
-			return c.m, nil
-		}
-	}
-	e.cacheMu.Unlock()
-
-	if _, err := e.store.GetSnapshot(jobID, snapID); err != nil {
-		return nil, err
-	}
-	job, err := e.loadJob(jobID)
-	if err != nil {
-		return nil, err
-	}
-	r, err := e.openRepo(ctx, job)
-	if err != nil {
-		return nil, err
-	}
-	m, err := r.LoadManifest(ctx, snapID)
-	if err != nil {
-		return nil, err
-	}
-	e.cacheMu.Lock()
-	e.manifests = append(e.manifests, cachedManifest{key: key, m: m})
-	if len(e.manifests) > manifestCacheSize {
-		e.manifests = e.manifests[1:]
-	}
-	e.cacheMu.Unlock()
-	return m, nil
-}
-
-func (e *Engine) forgetManifest(jobID int64, snapID string) {
-	key := fmt.Sprintf("%d/%s", jobID, snapID)
-	e.cacheMu.Lock()
-	defer e.cacheMu.Unlock()
-	for i, c := range e.manifests {
-		if c.key == key {
-			e.manifests = append(e.manifests[:i], e.manifests[i+1:]...)
-			return
-		}
-	}
 }

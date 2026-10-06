@@ -35,12 +35,8 @@ type Engine struct {
 	wg        sync.WaitGroup
 
 	cacheMu   sync.Mutex
-	manifests []cachedManifest
-}
-
-type cachedManifest struct {
-	key string
-	m   *repo.Manifest
+	manifests []*cachedManifest
+	repos     []cachedRepo
 }
 
 func New(st *store.Store, tmpDir string) *Engine {
